@@ -1,0 +1,55 @@
+services:
+  sqs:
+    image: softwaremill/elasticmq
+    volumes:
+      - ${PWD}/docker/elasticmq/elasticmq.conf:/opt/elasticmq.conf
+      - sqs-data:/data
+    ports:
+      - "9324:9324"
+
+  sqs-admin:
+    image: pacovk/sqs-admin:latest
+    environment:
+      - SQS_ENDPOINT_URL=http://sqs:9324
+      - SQS_AWS_REGION=eu-central-1
+    ports:
+      - "3999:3999"
+
+  sns-publisher:
+    image: tliesche/sns-publisher:develop
+    hostname: sns-publisher
+    environment:
+      - AWS_REGION=eu-central-1
+      - SQS_ENDPOINT=http://sqs:9324
+      - SNS_TOPICS=example-topic,example-topic-2
+      - SNS_SQS_SUBSCRIPTIONS=example-topic:example-queue,example-topic-2:example-queue
+    ports:
+      - "8081:8080"
+
+  sqs-lambda-trigger:
+    image: tliesche/sqs-lambda-trigger:develop
+    hostname: sqs-lambda-trigger
+    environment:
+      - AWS_REGION=eu-central-1
+      - LAMBDA_ENDPOINT=http://lamba:8080
+      - LAMBDA_CONCURRENCY=1
+      - LAMBDA_INVOCATION_TYPE=RequestResponse
+      - PAYLOAD_FORMAT=sqs-event
+      - SQS_ENDPOINT=http://sqs:9324
+      - SQS_QUEUE_NAME=example-queue
+      - SQS_MESSAGE_BATCH_SIZE=10
+      - SQS_WAIT_TIME=20
+
+  secrets-manager:
+    image: tliesche/secrets-manager:develop
+    hostname: secrets-manager
+    environment:
+      - AWS_REGION=eu-central-1
+      - AWS_ACCOUNT_ID=000000000000
+      - SECRETS_MANAGER_SECRETS=example-secret=example-secret-value
+    ports:
+      - "8082:8080"
+
+volumes:
+    sqs-data:
+        driver: local
