@@ -14,9 +14,10 @@
 FROM amazonlinux:2 AS builder
 
 ARG TARGETARCH
+ARG GOLANGVER
 RUN yum install -y gcc gcc-c++ git make tar gzip && \
-  curl -OL https://go.dev/dl/go1.24.0.linux-${TARGETARCH}.tar.gz && \
-  rm -rf /usr/local/go && tar -C /usr/local -xzf go1.24.0.linux-${TARGETARCH}.tar.gz
+  curl -OL https://go.dev/dl/go${GOLANGVER}.linux-${TARGETARCH}.tar.gz && \
+  rm -rf /usr/local/go && tar -C /usr/local -xzf go${GOLANGVER}.linux-${TARGETARCH}.tar.gz
 
 ENV PATH=$PATH:/usr/local/go/bin
 ARG CACHEBUST
@@ -34,11 +35,12 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 FROM amazonlinux:2
 
 ARG BUILDVER
+ARG COMMIT
 LABEL org.opencontainers.image.authors="Toni Liesche <docker@toniliesche.de>"
 LABEL org.opencontainers.image.url="https://hub.docker.com/r/tliesche/sns-publisher"
 LABEL org.opencontainers.image.documentation="https://raw.githubusercontent.com/toniliesche/dev-toolbox-for-aws/refs/heads/develop/README.md"
 LABEL org.opencontainers.image.source="https://github.com/toniliesche/dev-toolbox-for-aws"
-LABEL org.opencontainers.image.version=${BUILDVER}
+LABEL org.opencontainers.image.version="${BUILDVER} <${COMMIT}>"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.title="Local SNS to SQS Publisher Mock"
 LABEL org.opencontainers.image.description="Custom AWS compatible SNS to SQS Publisher for Local Development"

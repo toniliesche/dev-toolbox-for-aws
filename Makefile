@@ -17,51 +17,60 @@ endif
 
 PROJECTS=secrets-manager sns-publisher sqs-lambda-trigger
 PROJECTS_DEV=$(PROJECTS) lambda-hello-world
+GOLANGVER=1.24.1
 
-build-docker-rc-%: set-version-rc
+build-docker-rc-%: set-version-rc set-commit
 	docker buildx build \
 		--pull \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg CACHEBUST=$(shell date +%s) \
 		--build-arg BUILDVER=$(run.build.version) \
+		--build-arg COMMIT=$(run.commit) \
+		--build-arg GOLANGVER=$(GOLANGVER) \
 		-t tliesche/$*:$(run.build.version) \
-		$(if $PUSH,--push,) \
+		$(if $(PUSH),--push,--load) \
  		docker/$*
 
-build-docker-patch-%: set-version-patch
+build-docker-patch-%: set-version-patch set-commit
 	docker buildx build \
 		--pull \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg CACHEBUST=$(shell date +%s) \
 		--build-arg BUILDVER=$(run.build.version) \
+		--build-arg COMMIT=$(run.commit) \
+		--build-arg GOLANGVER=$(GOLANGVER) \
 		-t tliesche/$*:$(run.build.version) \
 		-t tliesche/$*:$(run.build.version.minor) \
 		-t tliesche/$*:$(run.build.version.major) \
 		-t tliesche/$*:latest \
-		$(if $PUSH,--push,) \
+		$(if $(PUSH),--push,--load) \
 		docker/$*
 
-build-docker-release-%: set-version-release
+build-docker-release-%: set-version-release set-commit
 	docker buildx build \
 		--pull \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg CACHEBUST=$(shell date +%s) \
 		--build-arg BUILDVER=$(run.build.version) \
+		--build-arg COMMIT=$(run.commit) \
+		--build-arg GOLANGVER=$(GOLANGVER) \
 		-t tliesche/$*:$(run.build.version) \
 		-t tliesche/$*:$(run.build.version.minor) \
 		-t tliesche/$*:$(run.build.version.major) \
 		-t tliesche/$*:latest \
-		$(if $PUSH,--push,) \
+		$(if $(PUSH),--push,--load) \
 		docker/$*
 
 build-docker-%: set-version-%
 	$(foreach project, $(PROJECTS), $(MAKE) build-docker-$*-$(project);)
 
-build-dev-docker-%:
+build-dev-docker-%: set-commit
 	docker build \
 		--pull \
 		--build-arg CACHEBUST=$(shell date +%s) \
 		--build-arg BUILDVER=develop \
+		--build-arg COMMIT=$(run.commit) \
+		--build-arg GOLANGVER=$(GOLANGVER) \
 		-t tliesche/$*:develop \
 		docker/$*
 
@@ -91,6 +100,9 @@ set-version-patch: set-additional-versions
 set-additional-versions:
 	$(eval run.build.version.major := ${build.version.major})
 	$(eval run.build.version.minor := ${build.version.major}.${build.version.minor})
+
+set-commit:
+	$(eval run.commit := $(shell git rev-parse --short HEAD))
 
 increase-%: update-% write-properties
 	@echo updated build.properties file
