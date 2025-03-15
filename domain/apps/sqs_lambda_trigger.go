@@ -104,55 +104,45 @@ func (t *SqsLambdaTrigger) handle(result *sqs.ReceiveMessageOutput) {
 }
 
 func (t *SqsLambdaTrigger) handleSqsMessageBatch(result *sqs.ReceiveMessageOutput) {
-	numMessages := len(result.Messages)
+	t.semaphore <- 1
+	go func(messageBatch []*sqs.Message) {
+		defer func() {
+			<-t.semaphore
+		}()
 
-	for i := 0; i < numMessages; i += t.config.LambdaConfig.MaxBatchSize {
-		endIndex := i + t.config.LambdaConfig.MaxBatchSize
-		if endIndex > numMessages {
-			endIndex = numMessages
+		if len(messageBatch) == 0 {
+			log.Println("No messages to process")
+
+			return
 		}
 
-		messageBatch := result.Messages[i:endIndex]
+		log.Printf("Received batch of %d messages", len(messageBatch))
 
-		t.semaphore <- 1
+		payload, err := t.wrapSqsMessageBatch(messageBatch)
 
-		go func(messageBatch []*sqs.Message) {
-			defer func() {
-				<-t.semaphore
-			}()
+		log.Printf("Sending event: %s", payload)
 
-			if len(messageBatch) == 0 {
-				return
-			}
+		if err != nil {
+			log.Printf("Error marshalling message: %v", err)
+			return
+		}
 
-			log.Printf("Received batch of %d messages", len(messageBatch))
+		var successfulMessages []*sqs.Message
+		if successfulMessages, err = t.invokeLambdaWithSqsMessageBatch(payload, messageBatch); err != nil {
+			log.Printf("Error invoking lambda: %v", err)
+			return
+		}
 
-			payload, err := t.wrapSqsMessageBatch(messageBatch)
-
-			log.Printf("Sending event: %s", payload)
-
-			if err != nil {
-				log.Printf("Error marshalling message: %v", err)
-				return
-			}
-
-			var successfulMessages []*sqs.Message
-			if successfulMessages, err = t.invokeLambdaWithSqsMessageBatch(payload, messageBatch); err != nil {
-				log.Printf("Error invoking lambda: %v", err)
-				return
-			}
-
-			for _, msg := range successfulMessages {
-				log.Printf("Successfully processed message: %s", *msg.MessageId)
-				_, err = t.sqsService.DeleteMessage(
-					&sqs.DeleteMessageInput{
-						QueueUrl:      &t.queueUrl,
-						ReceiptHandle: msg.ReceiptHandle,
-					},
-				)
-			}
-		}(messageBatch)
-	}
+		for _, msg := range successfulMessages {
+			log.Printf("Successfully processed message: %s", *msg.MessageId)
+			_, err = t.sqsService.DeleteMessage(
+				&sqs.DeleteMessageInput{
+					QueueUrl:      &t.queueUrl,
+					ReceiptHandle: msg.ReceiptHandle,
+				},
+			)
+		}
+	}(result.Messages)
 }
 
 func (t *SqsLambdaTrigger) handleActionMessage(result *sqs.ReceiveMessageOutput) {
