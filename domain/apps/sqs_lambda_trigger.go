@@ -121,6 +121,10 @@ func (t *SqsLambdaTrigger) handleSqsMessageBatch(result *sqs.ReceiveMessageOutpu
 				<-t.semaphore
 			}()
 
+			if len(messageBatch) == 0 {
+				return
+			}
+
 			log.Printf("Received batch of %d messages", len(messageBatch))
 
 			payload, err := t.wrapSqsMessageBatch(messageBatch)
