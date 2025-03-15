@@ -43,6 +43,9 @@ func (t *SqsLambdaTrigger) Run() error {
 	}
 
 	for {
+		time.Sleep(5 * time.Second)
+
+		t.semaphore <- 1
 		msgResult, err := t.sqsService.ReceiveMessage(&sqs.ReceiveMessageInput{
 			QueueUrl:            &t.queueUrl,
 			MaxNumberOfMessages: aws.Int64(t.config.MessageBatchSize),
@@ -50,12 +53,13 @@ func (t *SqsLambdaTrigger) Run() error {
 		})
 
 		if err != nil {
+			<-t.semaphore
 			log.Printf("Error receiving message: %v", err)
-			time.Sleep(5 * time.Second)
 			continue
 		}
 
 		if msgResult == nil || msgResult.Messages == nil || len(msgResult.Messages) == 0 {
+			<-t.semaphore
 			continue
 		}
 
@@ -104,7 +108,6 @@ func (t *SqsLambdaTrigger) handle(result *sqs.ReceiveMessageOutput) {
 }
 
 func (t *SqsLambdaTrigger) handleSqsMessageBatch(result *sqs.ReceiveMessageOutput) {
-	t.semaphore <- 1
 	go func(messageBatch []*sqs.Message) {
 		defer func() {
 			<-t.semaphore
@@ -147,8 +150,6 @@ func (t *SqsLambdaTrigger) handleSqsMessageBatch(result *sqs.ReceiveMessageOutpu
 
 func (t *SqsLambdaTrigger) handleActionMessage(result *sqs.ReceiveMessageOutput) {
 	for _, msg := range result.Messages {
-		t.semaphore <- 1
-
 		go func(msg *sqs.Message) {
 			defer func() {
 				<-t.semaphore
