@@ -22,7 +22,7 @@ import (
 
 type SNSPublisherConfig struct {
 	SNSConfig *SNSConfig `yaml:"sns"`
-	SQSConfig *SQSConfig `yaml:"sqs"`
+	SqsConfig *SqsConfig `yaml:"sqs"`
 }
 
 func (c *SNSPublisherConfig) Validate() error {
@@ -34,11 +34,11 @@ func (c *SNSPublisherConfig) Validate() error {
 		return err
 	}
 
-	if c.SQSConfig == nil {
+	if c.SqsConfig == nil {
 		return fmt.Errorf("config section `sqs` must exist")
 	}
 
-	if err := c.SQSConfig.Validate("sqs", true); err != nil {
+	if err := c.SqsConfig.Validate("sqs", true); err != nil {
 		return err
 	}
 
@@ -90,6 +90,6 @@ func getSNSPublisherConfigFromEnvironment() (*SNSPublisherConfig, error) {
 
 	return &SNSPublisherConfig{
 		SNSConfig: snsConfig,
-		SQSConfig: getSQSConfigFromEnvironmentVariables(),
+		SqsConfig: getSqsConfigFromEnvironmentVariables(),
 	}, nil
 }

@@ -18,15 +18,13 @@ import (
 	"fmt"
 )
 
-type SQSConfig struct {
-	Region           string `yaml:"region"`
-	Endpoint         string `yaml:"endpoint"`
-	QueueName        string `yaml:"queue_name"`
-	MessageBatchSize int64  `yaml:"message_batch_size"`
-	WaitTime         int64  `yaml:"wait_time"`
+type SqsConfig struct {
+	Region    string `yaml:"region"`
+	Endpoint  string `yaml:"endpoint"`
+	QueueName string `yaml:"queue_name"`
 }
 
-func (c *SQSConfig) Validate(path string, allowEmptyQueue bool) error {
+func (c *SqsConfig) Validate(path string, allowEmptyQueue bool) error {
 	if c.Region == "" {
 		return fmt.Errorf("config value `%s.region` must exist", path)
 	}
@@ -39,23 +37,13 @@ func (c *SQSConfig) Validate(path string, allowEmptyQueue bool) error {
 		return fmt.Errorf("config value `%s.queue_name` must exist", path)
 	}
 
-	if c.MessageBatchSize <= 0 {
-		return fmt.Errorf("config value `%s.message_batch_size` must be greater than 0", path)
-	}
-
-	if c.WaitTime <= 0 {
-		return fmt.Errorf("config value `%s.wait_time` must be greater than 0", path)
-	}
-
 	return nil
 }
 
-func getSQSConfigFromEnvironmentVariables() *SQSConfig {
-	return &SQSConfig{
-		Region:           shared.GetEnvironmentString("AWS_REGION", "eu-central-1"),
-		Endpoint:         shared.GetEnvironmentString("SQS_ENDPOINT", "http://localhost:4566"),
-		QueueName:        shared.GetEnvironmentString("SQS_QUEUE_NAME", "my-queue"),
-		MessageBatchSize: shared.GetEnvironmentInt("SQS_MESSAGE_BATCH_SIZE", 10),
-		WaitTime:         shared.GetEnvironmentInt("SQS_WAIT_TIME", 10),
+func getSqsConfigFromEnvironmentVariables() *SqsConfig {
+	return &SqsConfig{
+		Region:    shared.GetEnvironmentString("AWS_REGION", "eu-central-1"),
+		Endpoint:  shared.GetEnvironmentString("SQS_ENDPOINT", "http://localhost:4566"),
+		QueueName: shared.GetEnvironmentString("SQS_QUEUE_NAME", "my-queue"),
 	}
 }

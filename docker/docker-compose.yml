@@ -8,6 +8,8 @@ services:
       - "9324:9324"
 
   sqs-admin:
+    depends_on:
+      - sqs
     image: pacovk/sqs-admin:latest
     environment:
       - SQS_ENDPOINT_URL=http://sqs:9324
@@ -16,6 +18,8 @@ services:
       - "3999:3999"
 
   sns-publisher:
+    depends_on:
+      - sqs
     image: tliesche/sns-publisher:develop
     hostname: sns-publisher
     environment:
@@ -27,11 +31,14 @@ services:
       - "8081:8080"
 
   sqs-lambda-trigger:
+    depends_on:
+      - sqs
+      - lambda-function
     image: tliesche/sqs-lambda-trigger:develop
     hostname: sqs-lambda-trigger
     environment:
       - AWS_REGION=eu-central-1
-      - LAMBDA_ENDPOINT=http://lamba:8080
+      - LAMBDA_ENDPOINT=http://lamba-function:8080
       - LAMBDA_CONCURRENCY=1
       - LAMBDA_INVOCATION_TYPE=RequestResponse
       - PAYLOAD_FORMAT=sqs-event
@@ -49,6 +56,16 @@ services:
       - SECRETS_MANAGER_SECRETS=example-secret=example-secret-value
     ports:
       - "8082:8080"
+
+  lambda-function:
+    depends_on:
+      - sqs
+    image: tliesche/lambda-hello-world:develop
+    hostname: lambda-function
+    environment:
+      - MESSAGE_OUTCOME=accept
+    ports:
+      - "8080:8080"
 
 volumes:
     sqs-data:

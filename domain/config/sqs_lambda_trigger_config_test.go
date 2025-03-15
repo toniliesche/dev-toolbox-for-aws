@@ -19,16 +19,16 @@ import (
 	"testing"
 )
 
-func TestValidateSQSLambdaTriggerConfigWithoutLambdaConfigFails(t *testing.T) {
-	cfg := &config.SQSLambdaTriggerConfig{
-		SQSConfig: &config.SQSConfig{
-			Region:           "eu-central-1",
-			Endpoint:         "http://localhost:4566",
-			QueueName:        "my-queue",
-			MessageBatchSize: 10,
-			WaitTime:         10,
+func TestValidateSqsLambdaTriggerConfigWithoutLambdaConfigFails(t *testing.T) {
+	cfg := &config.SqsLambdaTriggerConfig{
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
 		},
-		PayloadFormat: "sqs-event",
+		PayloadFormat:    "sqs-event",
+		MessageBatchSize: 10,
+		WaitTime:         10,
 	}
 
 	err := cfg.Validate()
@@ -36,14 +36,16 @@ func TestValidateSQSLambdaTriggerConfigWithoutLambdaConfigFails(t *testing.T) {
 	assert.Equal(t, err.Error(), "config section `lambda` must exist")
 }
 
-func TestValidateSQSLambdaTriggerConfigWithoutSQSConfigFails(t *testing.T) {
-	cfg := &config.SQSLambdaTriggerConfig{
+func TestValidateSqsLambdaTriggerConfigWithoutSqsConfigFails(t *testing.T) {
+	cfg := &config.SqsLambdaTriggerConfig{
 		LambdaConfig: &config.LambdaConfig{
 			Endpoint:       "http://localhost:8080",
 			Concurrency:    1,
 			InvocationType: "RequestResponse",
 		},
-		PayloadFormat: "sqs-event",
+		PayloadFormat:    "sqs-event",
+		MessageBatchSize: 10,
+		WaitTime:         10,
 	}
 
 	err := cfg.Validate()
@@ -51,20 +53,20 @@ func TestValidateSQSLambdaTriggerConfigWithoutSQSConfigFails(t *testing.T) {
 	assert.Equal(t, err.Error(), "config section `sqs` must exist")
 }
 
-func TestValidateSQSLambdaTriggerConfigWithoutPayloadFormatFails(t *testing.T) {
-	cfg := &config.SQSLambdaTriggerConfig{
+func TestValidateSqsLambdaTriggerConfigWithoutPayloadFormatFails(t *testing.T) {
+	cfg := &config.SqsLambdaTriggerConfig{
 		LambdaConfig: &config.LambdaConfig{
 			Endpoint:       "http://localhost:8080",
 			Concurrency:    1,
 			InvocationType: "RequestResponse",
 		},
-		SQSConfig: &config.SQSConfig{
-			Region:           "eu-central-1",
-			Endpoint:         "http://localhost:4566",
-			QueueName:        "my-queue",
-			MessageBatchSize: 10,
-			WaitTime:         10,
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
 		},
+		MessageBatchSize: 10,
+		WaitTime:         10,
 	}
 
 	err := cfg.Validate()
@@ -72,21 +74,21 @@ func TestValidateSQSLambdaTriggerConfigWithoutPayloadFormatFails(t *testing.T) {
 	assert.Equal(t, err.Error(), "config value `payload_format` must exist")
 }
 
-func TestValidateSQSLambdaTriggerConfigWithInvalidPayloadFormatFails(t *testing.T) {
-	cfg := &config.SQSLambdaTriggerConfig{
+func TestValidateSqsLambdaTriggerConfigWithInvalidPayloadFormatFails(t *testing.T) {
+	cfg := &config.SqsLambdaTriggerConfig{
 		LambdaConfig: &config.LambdaConfig{
 			Endpoint:       "http://localhost:8080",
 			Concurrency:    1,
 			InvocationType: "RequestResponse",
 		},
-		SQSConfig: &config.SQSConfig{
-			Region:           "eu-central-1",
-			Endpoint:         "http://localhost:4566",
-			QueueName:        "my-queue",
-			MessageBatchSize: 10,
-			WaitTime:         10,
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
 		},
-		PayloadFormat: "invalid",
+		PayloadFormat:    "invalid",
+		MessageBatchSize: 10,
+		WaitTime:         10,
 	}
 
 	err := cfg.Validate()
@@ -94,21 +96,65 @@ func TestValidateSQSLambdaTriggerConfigWithInvalidPayloadFormatFails(t *testing.
 	assert.Equal(t, err.Error(), "config value `payload_format` must be one of [sqs-event, pure]")
 }
 
-func TestValidateSQSLambdaTriggerConfigSucceeds(t *testing.T) {
-	cfg := &config.SQSLambdaTriggerConfig{
+func TestValidateSqsLambdaTriggerConfigWithInvalidMessageBatchSizeFails(t *testing.T) {
+	cfg := &config.SqsLambdaTriggerConfig{
 		LambdaConfig: &config.LambdaConfig{
 			Endpoint:       "http://localhost:8080",
 			Concurrency:    1,
 			InvocationType: "RequestResponse",
 		},
-		SQSConfig: &config.SQSConfig{
-			Region:           "eu-central-1",
-			Endpoint:         "http://localhost:4566",
-			QueueName:        "my-queue",
-			MessageBatchSize: 10,
-			WaitTime:         10,
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
 		},
-		PayloadFormat: "sqs-event",
+		PayloadFormat:    "sqs-event",
+		MessageBatchSize: 0,
+		WaitTime:         10,
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Equal(t, err.Error(), "config value `message_batch_size` must be greater than 0")
+}
+
+func TestValidateSqsLambdaTriggerConfigWithInvalidWaitTimeFails(t *testing.T) {
+	cfg := &config.SqsLambdaTriggerConfig{
+		LambdaConfig: &config.LambdaConfig{
+			Endpoint:       "http://localhost:8080",
+			Concurrency:    1,
+			InvocationType: "RequestResponse",
+		},
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
+		},
+		PayloadFormat:    "sqs-event",
+		MessageBatchSize: 10,
+		WaitTime:         0,
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Equal(t, err.Error(), "config value `wait_time` must be greater than 0")
+}
+
+func TestValidateSqsLambdaTriggerConfigSucceeds(t *testing.T) {
+	cfg := &config.SqsLambdaTriggerConfig{
+		LambdaConfig: &config.LambdaConfig{
+			Endpoint:       "http://localhost:8080",
+			Concurrency:    1,
+			InvocationType: "RequestResponse",
+		},
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
+		},
+		PayloadFormat:    "sqs-event",
+		MessageBatchSize: 10,
+		WaitTime:         10,
 	}
 
 	err := cfg.Validate()

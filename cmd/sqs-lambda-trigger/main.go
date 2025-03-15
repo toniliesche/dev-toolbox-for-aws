@@ -20,12 +20,12 @@ import (
 )
 
 func main() {
-	sqsLambdaTriggerConfig, err := config.ProvideSQSLambdaTriggerConfig()
+	sqsLambdaTriggerConfig, err := config.ProvideSqsLambdaTriggerConfig()
 	if err != nil {
 		log.Fatalf("Error providing config: %v", err)
 	}
 
-	sqsLambdaTrigger, err := apps.ProvideSQSLambdaTrigger(sqsLambdaTriggerConfig)
+	sqsLambdaTrigger, err := apps.ProvideSqsLambdaTrigger(sqsLambdaTriggerConfig)
 	if err != nil {
 		log.Fatalf("Error providing sqs lambda trigger: %v", err)
 	}

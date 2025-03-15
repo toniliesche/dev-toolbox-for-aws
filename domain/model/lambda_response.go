@@ -11,26 +11,12 @@
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
 
-package main
+package model
 
-import (
-	"dev-toolbox-for-aws/domain/apps"
-	"dev-toolbox-for-aws/domain/config"
-	"log"
-)
+type LambdaResponse struct {
+	BatchItemFailures []BatchItemFailure `json:"batchItemFailures"`
+}
 
-func main() {
-	snsPublisherConfig, err := config.ProvideSNSPublisherConfig()
-	if err != nil {
-		log.Fatalf("Error providing config: %v", err)
-	}
-
-	snsPublisher, err := apps.ProvideSNSPublisher(snsPublisherConfig)
-	if err != nil {
-		log.Fatalf("Error providing sns publisher: %v", err)
-	}
-
-	if err = snsPublisher.Run(); err != nil {
-		log.Fatalf("Error running sns publisher: %v", err)
-	}
+type BatchItemFailure struct {
+	ItemIdentifier string `json:"itemIdentifier"`
 }

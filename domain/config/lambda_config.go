@@ -22,6 +22,7 @@ import (
 type LambdaConfig struct {
 	Endpoint       string `yaml:"endpoint"`
 	Concurrency    int    `yaml:"concurrency"`
+	MaxBatchSize   int    `yaml:"max_batch_size"`
 	InvocationType string `yaml:"invocation_type"`
 }
 

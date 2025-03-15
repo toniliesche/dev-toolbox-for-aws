@@ -16,6 +16,7 @@ package apps
 import (
 	"bytes"
 	"dev-toolbox-for-aws/domain/config"
+	"dev-toolbox-for-aws/domain/model"
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -28,14 +29,15 @@ import (
 	"time"
 )
 
-type SQSLambdaTrigger struct {
-	config     *config.SQSLambdaTriggerConfig
+type SqsLambdaTrigger struct {
+	config     *config.SqsLambdaTriggerConfig
 	queueUrl   string
 	sqsService *sqs.SQS
 	httpClient *http.Client
+	semaphore  chan int
 }
 
-func (t *SQSLambdaTrigger) Run() error {
+func (t *SqsLambdaTrigger) Run() error {
 	if err := t.setup(); err != nil {
 		return err
 	}
@@ -43,8 +45,8 @@ func (t *SQSLambdaTrigger) Run() error {
 	for {
 		msgResult, err := t.sqsService.ReceiveMessage(&sqs.ReceiveMessageInput{
 			QueueUrl:            &t.queueUrl,
-			MaxNumberOfMessages: aws.Int64(t.config.SQSConfig.MessageBatchSize),
-			WaitTimeSeconds:     aws.Int64(t.config.SQSConfig.WaitTime),
+			MaxNumberOfMessages: aws.Int64(t.config.MessageBatchSize),
+			WaitTimeSeconds:     aws.Int64(t.config.WaitTime),
 		})
 
 		if err != nil {
@@ -57,12 +59,12 @@ func (t *SQSLambdaTrigger) Run() error {
 	}
 }
 
-func (t *SQSLambdaTrigger) setup() error {
+func (t *SqsLambdaTrigger) setup() error {
 	awsSession := session.Must(
 		session.NewSession(
 			&aws.Config{
-				Region:      aws.String(t.config.SQSConfig.Region),
-				Endpoint:    aws.String(t.config.SQSConfig.Endpoint),
+				Region:      aws.String(t.config.SqsConfig.Region),
+				Endpoint:    aws.String(t.config.SqsConfig.Endpoint),
 				Credentials: credentials.NewStaticCredentials("x", "x", "x"),
 			},
 		),
@@ -71,7 +73,7 @@ func (t *SQSLambdaTrigger) setup() error {
 	t.sqsService = sqs.New(awsSession)
 	result, err := t.sqsService.GetQueueUrl(
 		&sqs.GetQueueUrlInput{
-			QueueName: aws.String(t.config.SQSConfig.QueueName),
+			QueueName: aws.String(t.config.SqsConfig.QueueName),
 		},
 	)
 
@@ -84,30 +86,40 @@ func (t *SQSLambdaTrigger) setup() error {
 		Timeout: 30 * time.Minute,
 	}
 
+	t.semaphore = make(chan int, t.config.LambdaConfig.Concurrency)
+
 	return nil
 }
 
-func (t *SQSLambdaTrigger) handle(result *sqs.ReceiveMessageOutput) {
-	var payload []byte
-	var err error
+func (t *SqsLambdaTrigger) handle(result *sqs.ReceiveMessageOutput) {
+	if t.config.PayloadFormat == "sqs-event" {
+		t.handleSqsMessageBatch(result)
+	} else {
+		t.handleActionMessage(result)
+	}
+}
 
-	semaphore := make(chan int, t.config.LambdaConfig.Concurrency)
+func (t *SqsLambdaTrigger) handleSqsMessageBatch(result *sqs.ReceiveMessageOutput) {
+	numMessages := len(result.Messages)
 
-	for _, msg := range result.Messages {
-		semaphore <- 1
+	for i := 0; i < numMessages; i += t.config.LambdaConfig.MaxBatchSize {
+		endIndex := i + t.config.LambdaConfig.MaxBatchSize
+		if endIndex > numMessages {
+			endIndex = numMessages
+		}
 
-		go func(msg *sqs.Message) {
+		messageBatch := result.Messages[i:endIndex]
+
+		t.semaphore <- 1
+
+		go func(messageBatch []*sqs.Message) {
 			defer func() {
-				<-semaphore
+				<-t.semaphore
 			}()
 
-			log.Printf("Received message: %s", *msg.Body)
+			log.Printf("Received batch of %d messages", len(messageBatch))
 
-			if t.config.PayloadFormat == "sqs-event" {
-				payload, err = t.wrapSQSEvent(msg)
-			} else {
-				payload, err = []byte(*msg.Body), nil
-			}
+			payload, err := t.wrapSqsMessageBatch(messageBatch)
 
 			log.Printf("Sending event: %s", payload)
 
@@ -116,8 +128,43 @@ func (t *SQSLambdaTrigger) handle(result *sqs.ReceiveMessageOutput) {
 				return
 			}
 
+			var successfulMessages []*sqs.Message
+			if successfulMessages, err = t.invokeLambdaWithSqsMessageBatch(payload, messageBatch); err != nil {
+				log.Printf("Error invoking lambda: %v", err)
+				return
+			}
+
+			for _, msg := range successfulMessages {
+				log.Printf("Successfully processed message: %s", *msg.MessageId)
+				_, err = t.sqsService.DeleteMessage(
+					&sqs.DeleteMessageInput{
+						QueueUrl:      &t.queueUrl,
+						ReceiptHandle: msg.ReceiptHandle,
+					},
+				)
+			}
+		}(messageBatch)
+	}
+}
+
+func (t *SqsLambdaTrigger) handleActionMessage(result *sqs.ReceiveMessageOutput) {
+	for _, msg := range result.Messages {
+		t.semaphore <- 1
+
+		go func(msg *sqs.Message) {
+			defer func() {
+				<-t.semaphore
+			}()
+
+			log.Printf("Received message: %s", *msg.Body)
+
+			payload := []byte(*msg.Body)
+
+			log.Printf("Sending event: %s", payload)
+
 			var success bool
-			if success, err = t.invokeLambda(payload); err != nil {
+			var err error
+			if success, err = t.invokeLambdaWithActionMessage(payload); err != nil {
 				log.Printf("Error invoking lambda: %v", err)
 				return
 			}
@@ -136,7 +183,55 @@ func (t *SQSLambdaTrigger) handle(result *sqs.ReceiveMessageOutput) {
 	}
 }
 
-func (t *SQSLambdaTrigger) invokeLambda(payload []byte) (bool, error) {
+func (t *SqsLambdaTrigger) invokeLambdaWithSqsMessageBatch(payload []byte, messages []*sqs.Message) ([]*sqs.Message, error) {
+	req, err := http.NewRequest("POST", t.config.LambdaConfig.Endpoint+"/2015-03-31/functions/function/invocations", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Add("X-Amz-Invocation-Type", t.config.LambdaConfig.InvocationType)
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := t.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error invoking lambda: %v", err)
+	}
+
+	if resp == nil {
+		return nil, fmt.Errorf("error invoking lambda: response is nil")
+	}
+
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error invoking lambda: %v", resp.Status)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("Lambda response: %s", string(body))
+
+	lambdaResponse := &model.LambdaResponse{}
+
+	err = json.Unmarshal(body, lambdaResponse)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling lambda response: %v", err)
+	}
+
+	failedMessages := make(map[string]bool)
+	for _, failure := range lambdaResponse.BatchItemFailures {
+		failedMessages[failure.ItemIdentifier] = true
+	}
+
+	successfulMessages := make([]*sqs.Message, 0)
+	for _, msg := range messages {
+		if _, ok := failedMessages[*msg.MessageId]; !ok {
+			successfulMessages = append(successfulMessages, msg)
+		}
+	}
+
+	return successfulMessages, nil
+}
+
+func (t *SqsLambdaTrigger) invokeLambdaWithActionMessage(payload []byte) (bool, error) {
 	req, err := http.NewRequest("POST", t.config.LambdaConfig.Endpoint+"/2015-03-31/functions/function/invocations", bytes.NewReader(payload))
 	if err != nil {
 		return false, fmt.Errorf("error creating request: %v", err)
@@ -165,31 +260,36 @@ func (t *SQSLambdaTrigger) invokeLambda(payload []byte) (bool, error) {
 	return true, nil
 }
 
-func (t *SQSLambdaTrigger) wrapSQSEvent(msg *sqs.Message) ([]byte, error) {
-	return json.Marshal(
-		map[string]interface{}{
-			"Records": []map[string]interface{}{
-				{
-					"messageId":         *msg.MessageId,
-					"receiptHandle":     *msg.ReceiptHandle,
-					"body":              *msg.Body,
-					"attributes":        msg.Attributes,
-					"messageAttributes": msg.MessageAttributes,
-					"eventSource":       "aws:sqs",
-					"eventSourceARN":    t.queueUrl,
-					"awsRegion":         t.config.SQSConfig.Region,
-				},
-			},
-		},
-	)
+func (t *SqsLambdaTrigger) wrapSqsMessageBatch(batch []*sqs.Message) ([]byte, error) {
+	records := make([]map[string]interface{}, len(batch))
+
+	for _, msg := range batch {
+		records = append(records, map[string]interface{}{
+			"messageId":         msg.MessageId,
+			"receiptHandle":     msg.ReceiptHandle,
+			"body":              msg.Body,
+			"attributes":        msg.Attributes,
+			"messageAttributes": msg.MessageAttributes,
+			"md5OfBody":         msg.MD5OfBody,
+			"eventSource":       "aws:sqs",
+			"eventSourceARN":    t.queueUrl,
+			"awsRegion":         t.config.SqsConfig.Region,
+		})
+	}
+
+	wrappedMsg := map[string][]map[string]interface{}{
+		"Records": records,
+	}
+
+	return json.Marshal(wrappedMsg)
 }
 
-func ProvideSQSLambdaTrigger(cfg *config.SQSLambdaTriggerConfig) (*SQSLambdaTrigger, error) {
+func ProvideSqsLambdaTrigger(cfg *config.SqsLambdaTriggerConfig) (*SqsLambdaTrigger, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("failed validation application config: %v", err)
 	}
 
-	return &SQSLambdaTrigger{
+	return &SqsLambdaTrigger{
 		config: cfg,
 	}, nil
 }

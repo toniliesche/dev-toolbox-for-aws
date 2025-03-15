@@ -78,7 +78,7 @@ func (p *SNSPublisher) handleSNSRequests(writer http.ResponseWriter, request *ht
 
 	topic := topicParts[5]
 	if _, ok := p.sqsSubscribers[topic]; ok {
-		if err = p.sendToSQSSubscribers(topic, message, messageStructure, messageAttributes); err != nil {
+		if err = p.sendToSqsSubscribers(topic, message, messageStructure, messageAttributes); err != nil {
 			http.Error(writer, fmt.Sprintf("Error sending message to SQS subscribers: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -96,8 +96,8 @@ func (p *SNSPublisher) handleSNSRequests(writer http.ResponseWriter, request *ht
 func (p *SNSPublisher) setup() error {
 	awsSession := session.Must(session.NewSession(
 		&aws.Config{
-			Region:      aws.String(p.config.SQSConfig.Region),
-			Endpoint:    aws.String(p.config.SQSConfig.Endpoint),
+			Region:      aws.String(p.config.SqsConfig.Region),
+			Endpoint:    aws.String(p.config.SqsConfig.Endpoint),
 			Credentials: credentials.NewStaticCredentials("x", "x", "x"),
 		}))
 
@@ -175,7 +175,7 @@ func (p *SNSPublisher) splitAttributeKey(key string) model.AttributeKeyParts {
 	return parts
 }
 
-func (p *SNSPublisher) sendToSQSQueue(queueUrl string, message string, attributes map[string]*sqs.MessageAttributeValue) error {
+func (p *SNSPublisher) sendToSqsQueue(queueUrl string, message string, attributes map[string]*sqs.MessageAttributeValue) error {
 	_, err := p.sqsService.SendMessage(
 		&sqs.SendMessageInput{
 			MessageBody:       aws.String(message),
@@ -230,7 +230,7 @@ func (p *SNSPublisher) extractMessage(structure string, subscriberType string, m
 	return "", fmt.Errorf("message not found for subscriber type: %s", subscriberType)
 }
 
-func (p *SNSPublisher) sendToSQSSubscribers(topic string, message string, structure string, attributes map[string]map[string]string) error {
+func (p *SNSPublisher) sendToSqsSubscribers(topic string, message string, structure string, attributes map[string]map[string]string) error {
 	sqsAttributes := p.mapSqsMessageAttributes(attributes)
 
 	sqsMessage, err := p.extractMessage(structure, "sqs", message)
@@ -245,7 +245,7 @@ func (p *SNSPublisher) sendToSQSSubscribers(topic string, message string, struct
 			return fmt.Errorf("queue %s not found", queue)
 		}
 
-		if err = p.sendToSQSQueue(queueUrl, sqsMessage, sqsAttributes); err != nil {
+		if err = p.sendToSqsQueue(queueUrl, sqsMessage, sqsAttributes); err != nil {
 			return err
 		}
 	}

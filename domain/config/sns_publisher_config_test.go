@@ -21,12 +21,10 @@ import (
 
 func TestValidateSNSPublisherConfigWithoutSNSConfigFails(t *testing.T) {
 	cfg := &config.SNSPublisherConfig{
-		SQSConfig: &config.SQSConfig{
-			Region:           "eu-central-1",
-			Endpoint:         "http://localhost:4566",
-			QueueName:        "my-queue",
-			MessageBatchSize: 10,
-			WaitTime:         10,
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
 		},
 	}
 
@@ -35,7 +33,7 @@ func TestValidateSNSPublisherConfigWithoutSNSConfigFails(t *testing.T) {
 	assert.Equal(t, "config section `sns` must exist", err.Error())
 }
 
-func TestValidateSNSPublisherConfigWithoutSQSConfigFails(t *testing.T) {
+func TestValidateSNSPublisherConfigWithoutSqsConfigFails(t *testing.T) {
 	cfg := &config.SNSPublisherConfig{
 		SNSConfig: &config.SNSConfig{
 			Region: "eu-central-1",
@@ -74,12 +72,10 @@ func TestValidateSNSPublisherConfigSucceeds(t *testing.T) {
 				},
 			},
 		},
-		SQSConfig: &config.SQSConfig{
-			Region:           "eu-central-1",
-			Endpoint:         "http://localhost:4566",
-			QueueName:        "my-queue",
-			MessageBatchSize: 10,
-			WaitTime:         10,
+		SqsConfig: &config.SqsConfig{
+			Region:    "eu-central-1",
+			Endpoint:  "http://localhost:4566",
+			QueueName: "my-queue",
 		},
 	}
 

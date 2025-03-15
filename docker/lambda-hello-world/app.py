@@ -12,9 +12,24 @@
 # copies or substantial portions of the Software.
 
 import json
+import logging
+import os
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+FAIL_ALL_MESSAGES = os.getenv("FAIL_ALL_MESSAGES", "false").lower() == "true"
 
 def lambda_handler(event, context):
+    failed_messages = []
+
+    for record in event.get("Records", []):
+        if "messageId" in record:
+            if FAIL_ALL_MESSAGES:
+                failed_messages.append({"itemIdentifier": record["messageId"]})
+
+    logger.info("Received event: %s", json.dumps(event, indent=2))
+
     return {
-        "statusCode": 200,
-        "body": json.dumps("Hello, World!")
+        "batchItemFailures": failed_messages
     }
