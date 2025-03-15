@@ -260,7 +260,7 @@ func (t *SqsLambdaTrigger) invokeLambdaWithActionMessage(payload []byte) (bool, 
 }
 
 func (t *SqsLambdaTrigger) wrapSqsMessageBatch(batch []*sqs.Message) ([]byte, error) {
-	records := make([]map[string]interface{}, len(batch))
+	records := make([]map[string]interface{}, 0, len(batch))
 
 	for _, msg := range batch {
 		records = append(records, map[string]interface{}{
