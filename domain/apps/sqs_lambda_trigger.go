@@ -43,8 +43,6 @@ func (t *SqsLambdaTrigger) Run() error {
 	}
 
 	for {
-		time.Sleep(5 * time.Second)
-
 		t.semaphore <- 1
 		msgResult, err := t.sqsService.ReceiveMessage(&sqs.ReceiveMessageInput{
 			QueueUrl:            &t.queueUrl,
