@@ -38,7 +38,7 @@ services:
     hostname: sqs-lambda-trigger
     environment:
       - AWS_REGION=eu-central-1
-      - LAMBDA_ENDPOINT=http://lamba-function:8080
+      - LAMBDA_ENDPOINT=http://lambda-function:8080
       - LAMBDA_CONCURRENCY=1
       - LAMBDA_INVOCATION_TYPE=RequestResponse
       - PAYLOAD_FORMAT=sqs-event

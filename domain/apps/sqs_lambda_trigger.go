@@ -55,6 +55,10 @@ func (t *SqsLambdaTrigger) Run() error {
 			continue
 		}
 
+		if msgResult == nil || msgResult.Messages == nil || len(msgResult.Messages) == 0 {
+			continue
+		}
+
 		t.handle(msgResult)
 	}
 }
